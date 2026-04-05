@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Homelab Dashboard</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <style>
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --border:    #2a2d3d;
+      --text:      #e2e8f0;
+      --muted:     #8892a4;
+      --ok:        #22c55e;
+      --warn:      #f59e0b;
+      --error:     #ef4444;
+      --info:      #3b82f6;
+      --radius:    10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: .02em; }
+    #clock { font-size: .95rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+    #last-updated { font-size: .8rem; color: var(--muted); }
+    #refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .82rem;
+      transition: background .15s;
+    }
+    #refresh-btn:hover { background: var(--border); }
+
+    /* ── Layout ── */
+    main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+    /* ── Attention Panel ── */
+    #attention-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    #attention-panel .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    #attention-panel .dot {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--error);
+    }
+    #attention-items { padding: 4px 0; }
+    .attention-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      border-left: 3px solid transparent;
+    }
+    .attention-item.error  { border-left-color: var(--error); }
+    .attention-item.warn   { border-left-color: var(--warn); }
+    .attention-item .badge {
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .attention-item.error .badge { background: rgba(239,68,68,.2); color: var(--error); }
+    .attention-item.warn  .badge { background: rgba(245,158,11,.2); color: var(--warn); }
+    .all-clear {
+      padding: 14px 16px;
+      color: var(--ok);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Top row ── */
+    .top-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: stretch;
+    }
+    .top-row #attention-panel { margin-bottom: 0; }
+    @media (max-width: 700px) {
+      .top-row { grid-template-columns: 1fr; }
+    }
+
+    /* ── Card grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: .9rem;
+    }
+    .card-header .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .card-body { padding: 12px 16px; }
+
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left;
+      font-size: .72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--muted);
+      padding: 0 8px 8px 0;
+    }
+    td { padding: 6px 8px 6px 0; border-top: 1px solid var(--border); font-size: .85rem; }
+    tr:first-child td { border-top: none; }
+
+    /* ── Pill status ── */
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: .72rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .pill-ok    { background: rgba(34,197,94,.15);  color: var(--ok); }
+    .pill-warn  { background: rgba(245,158,11,.15); color: var(--warn); }
+    .pill-error { background: rgba(239,68,68,.15);  color: var(--error); }
+    .pill-muted { background: rgba(136,146,164,.1); color: var(--muted); }
+
+    /* ── Bar meter ── */
+    .bar-wrap { display: flex; align-items: center; gap: 8px; }
+    .bar-track {
+      flex: 1; height: 5px; background: var(--border);
+      border-radius: 3px; overflow: hidden;
+    }
+    .bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+    .bar-ok   { background: var(--ok); }
+    .bar-warn { background: var(--warn); }
+    .bar-err  { background: var(--error); }
+    .bar-label { width: 36px; text-align: right; font-size: .8rem; color: var(--muted); }
+
+    /* ── Unavailable state ── */
+    .unavailable {
+      color: var(--muted);
+      font-style: italic;
+      padding: 12px 0;
+      text-align: center;
+    }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--info);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Two-col row ── */
+    .two-col-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    /* ── Docker grid (3 cols) ── */
+    .docker-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .docker-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+      header { flex-wrap: wrap; gap: 8px; }
+      main { padding: 12px; }
+      .top-row, .two-col-row, .docker-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>&#127968; Homelab Dashboard</h1>
+  <div id="clock">—</div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="last-updated"></span>
+    <button id="refresh-btn" onclick="fetchStatus()">&#8635; Refresh</button>
+  </div>
+</header>
+
+<main>
+  <!-- Top row: Attention + PBS side by side -->
+  <div class="top-row">
+    <div id="attention-panel">
+      <div class="panel-header">
+        <span class="dot"></span>
+        Needs Attention
+      </div>
+      <div id="attention-items"><div class="all-clear">&#10003; Loading…</div></div>
+    </div>
+
+    <div class="card" id="card-pbs">
+      <div class="card-header">
+        <span>&#128252; PBS Datastores</span>
+        <span class="status-dot" id="dot-pbs" style="background:var(--muted)"></span>
+      </div>
+      <div class="card-body" id="body-pbs">
+        <div class="unavailable"><span class="spinner"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Proxmox + UniFi row -->
+  <div class="two-col-row">
+    <div class="card" id="card-proxmox">
+      <div class="card-header">
+        <span>&#128421; Proxmox Nodes</span>
+        <span class="status-dot" id="dot-proxmox" style="background:var(--muted)"></span>
+      </div>
+      <div class="card-body" id="body-proxmox">
+        <div class="unavailable"><span class="spinner"></span></div>
+      </div>
+    </div>
+
+    <div class="card" id="card-unifi">
+      <div class="card-header">
+        <span>&#128246; UniFi Devices</span>
+        <span class="status-dot" id="dot-unifi" style="background:var(--muted)"></span>
+      </div>
+      <div class="card-body" id="body-unifi">
+        <div class="unavailable"><span class="spinner"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Docker host cards -->
+  <div class="docker-grid" id="docker-host-cards"></div>
+</main>
+
+<script>
+// ── Clock (Ballarat = Australia/Melbourne) ──────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const str = now.toLocaleString('en-AU', {
+    timeZone: 'Australia/Melbourne',
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  });
+  document.getElementById('clock').textContent = str;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function pill(text, cls) {
+  return `<span class="pill pill-${cls}">${text}</span>`;
+}
+
+function bar(pct) {
+  const cls = pct > 90 ? 'bar-err' : pct > 75 ? 'bar-warn' : 'bar-ok';
+  return `<div class="bar-wrap">
+    <div class="bar-track"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
+    <span class="bar-label">${pct}%</span>
+  </div>`;
+}
+
+function fmtUptime(s) {
+  if (!s) return '—';
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function dotColor(ok) { return ok ? 'var(--ok)' : 'var(--error)'; }
+
+function unavailableHTML(reason) {
+  return `<div class="unavailable">${reason || 'Unavailable'}</div>`;
+}
+
+// ── Renderers ────────────────────────────────────────────────────────────────
+function renderProxmox(data) {
+  const el = document.getElementById('body-proxmox');
+  const dot = document.getElementById('dot-proxmox');
+  if (!data.available) {
+    dot.style.background = 'var(--muted)';
+    el.innerHTML = unavailableHTML(data.reason === 'not configured' ? 'Not configured' : `Error: ${data.reason}`);
+    return;
+  }
+  const allOk = data.nodes.every(n => n.status === 'online' && n.cpu_pct <= 85 && n.mem_pct <= 90);
+  dot.style.background = dotColor(allOk);
+
+  let html = `<table>
+    <tr><th>Node</th><th>CPU</th><th>Memory</th><th>Disk</th><th>Uptime</th></tr>`;
+  for (const n of data.nodes) {
+    const s = n.status === 'online'
+      ? pill('online', 'ok')
+      : pill(n.status, 'error');
+    html += `<tr>
+      <td><strong>${n.name}</strong><br><small style="color:var(--muted)">${s}</small></td>
+      <td>${bar(n.cpu_pct)}</td>
+      <td>${bar(n.mem_pct)}</td>
+      <td>${bar(n.disk_pct)}</td>
+      <td style="color:var(--muted)">${fmtUptime(n.uptime_s)}</td>
+    </tr>`;
+  }
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+function renderDocker(data) {
+  const wrap = document.getElementById('docker-host-cards');
+  if (!data.available) {
+    wrap.innerHTML = `<div class="card"><div class="card-header"><span>&#128679; Docker</span><span class="status-dot" style="background:var(--error)"></span></div><div class="card-body">${unavailableHTML(data.reason === 'not configured' ? 'Not configured' : `Error: ${data.reason}`)}</div></div>`;
+    return;
+  }
+
+  wrap.style.display = 'contents' in wrap ? '' : 'grid';
+  wrap.innerHTML = data.hosts.map(host => {
+    const dotColor = !host.available ? 'var(--error)' : host.containers.some(c => !c.running) ? 'var(--warn)' : 'var(--ok)';
+    const running = host.available ? host.containers.filter(c => c.running).length : 0;
+    const stopped = host.available ? host.containers.filter(c => !c.running).length : 0;
+    const total = host.available ? host.containers.length : 0;
+
+    let body;
+    if (!host.available) {
+      body = unavailableHTML(`Error: ${host.reason}`);
+    } else {
+      body = `<div style="margin-bottom:10px;color:var(--muted);font-size:.82rem">
+        ${running} running
+        ${stopped > 0 ? `&nbsp;·&nbsp;<span style="color:var(--warn)">${stopped} stopped</span>` : ''}
+        &nbsp;·&nbsp; ${total} total
+      </div>
+      <table><tr><th>Name</th><th>Image</th><th>Status</th></tr>`;
+      for (const c of host.containers) {
+        const s = c.running ? pill('running', 'ok') : pill(c.status, 'warn');
+        body += `<tr>
+          <td>${c.name}</td>
+          <td style="color:var(--muted);font-size:.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis">${c.image}</td>
+          <td>${s}</td>
+        </tr>`;
+      }
+      body += '</table>';
+    }
+
+    return `<div class="card">
+      <div class="card-header">
+        <span>&#128679; ${host.name}</span>
+        <span class="status-dot" style="background:${dotColor}"></span>
+      </div>
+      <div class="card-body">${body}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderUnifi(data) {
+  const el = document.getElementById('body-unifi');
+  const dot = document.getElementById('dot-unifi');
+  if (!data.available) {
+    dot.style.background = 'var(--muted)';
+    el.innerHTML = unavailableHTML(data.reason === 'not configured' ? 'Not configured' : `Error: ${data.reason}`);
+    return;
+  }
+  const offline = data.devices.filter(d => !d.online).length;
+  dot.style.background = offline === 0 ? 'var(--ok)' : 'var(--warn)';
+
+  let html = `<div style="margin-bottom:10px;color:var(--muted);font-size:.82rem">
+    ${data.devices.filter(d=>d.online).length} online
+    ${offline > 0 ? `&nbsp;·&nbsp;<span style="color:var(--warn)">${offline} offline</span>` : ''}
+  </div>
+  <table><tr><th>Device</th><th>IP</th><th>Uptime</th><th>State</th></tr>`;
+  for (const d of data.devices) {
+    const s = d.online ? pill('online', 'ok') : pill('offline', 'error');
+    html += `<tr>
+      <td><strong>${d.name}</strong><br><small style="color:var(--muted)">${d.model}</small></td>
+      <td style="color:var(--muted)">${d.ip || '—'}</td>
+      <td style="color:var(--muted)">${fmtUptime(d.uptime_s)}</td>
+      <td>${s}</td>
+    </tr>`;
+  }
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+function renderPbs(data) {
+  const el = document.getElementById('body-pbs');
+  const dot = document.getElementById('dot-pbs');
+  if (!data.available) {
+    dot.style.background = 'var(--muted)';
+    el.innerHTML = unavailableHTML(data.reason === 'not configured' ? 'Not configured' : `Error: ${data.reason}`);
+    return;
+  }
+  const allOk = data.datastores.every(ds => ds.used_pct <= 80);
+  dot.style.background = allOk ? 'var(--ok)' : (data.datastores.some(ds => ds.used_pct > 90) ? 'var(--error)' : 'var(--warn)');
+
+  let html = `<div style="margin-bottom:8px;color:var(--muted);font-size:.82rem">${data.host}</div>
+  <table><tr><th>Datastore</th><th>Used</th><th>Available</th><th>Snapshots</th></tr>`;
+  for (const ds of data.datastores) {
+    html += `<tr>
+      <td><strong>${ds.name}</strong></td>
+      <td><div style="min-width:120px">${bar(ds.used_pct)}</div><small style="color:var(--muted)">${ds.used_gb} / ${ds.total_gb} GB</small></td>
+      <td style="color:var(--muted)">${ds.avail_gb} GB</td>
+      <td style="color:var(--muted)">${ds.snapshots}</td>
+    </tr>`;
+  }
+  html += '</table>';
+  el.innerHTML = html;
+}
+
+function renderAttention(items) {
+  const el = document.getElementById('attention-items');
+  const dot = document.querySelector('#attention-panel .dot');
+  if (!items.length) {
+    dot.style.background = 'var(--ok)';
+    el.innerHTML = `<div class="all-clear">&#10003;&nbsp; All systems look good</div>`;
+    return;
+  }
+  dot.style.background = items.some(i => i.severity === 'error') ? 'var(--error)' : 'var(--warn)';
+  el.innerHTML = items.map(i =>
+    `<div class="attention-item ${i.severity}">
+      <span class="badge">${i.severity}</span>
+      <span>${i.msg}</span>
+    </div>`
+  ).join('');
+}
+
+// ── Fetch & render ───────────────────────────────────────────────────────────
+async function fetchStatus() {
+  document.getElementById('refresh-btn').textContent = '⟳ Refreshing…';
+  try {
+    const resp = await fetch('/api/status');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    renderAttention(data.attention);
+    renderProxmox(data.proxmox);
+    renderPbs(data.pbs);
+    renderDocker(data.docker);
+    renderUnifi(data.unifi);
+
+    const now = new Date().toLocaleTimeString('en-AU', {
+      timeZone: 'Australia/Melbourne', hour12: true
+    });
+    document.getElementById('last-updated').textContent = `Updated ${now}`;
+  } catch (e) {
+    document.getElementById('last-updated').textContent = `Fetch error: ${e.message}`;
+  } finally {
+    document.getElementById('refresh-btn').textContent = '⟳ Refresh';
+  }
+}
+
+fetchStatus();
+setInterval(fetchStatus, {{ refresh_interval }} * 1000);
+</script>
+</body>
+</html>

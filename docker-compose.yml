@@ -1,0 +1,19 @@
+services:
+  dashboard:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8088:8000"
+    env_file:
+      - .env
+    volumes:
+      # Docker socket — lets the app inspect local containers
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Mount backup directories here (adjust to your paths)
+      - /mnt/backups:/backups:ro
+    networks:
+      - dashboard
+
+networks:
+  dashboard:
+    driver: bridge
